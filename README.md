@@ -12,6 +12,8 @@ UAS and LAS for SpaCy parser on en_gum
 
 Part 2: 
 ---------------------------------------------------------------------------
+*** finetune_bert.py is for preprocessing and creating the vocab set 
+*** finetune_bert.ipynb is for actual finetuning, training, and evaluations 
 - lambda = 0.25: 
   - 'rel_pos acc': 0.6714
   - 'dep_label acc': 0.8527
