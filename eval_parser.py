@@ -60,7 +60,7 @@ if __name__ == "__main__":
     if args.method == "spacy":
         parser = SpacyParser(args.model_name)
     elif args.method == "bert":
-        parser = BertParser(model_path='./bert-parser-0.5.pt')
+        parser = BertParser(model_path='./bert-parser-0.75.pt', mst=True)
     else:
         raise ValueError("Unknown parser")
 
@@ -72,9 +72,8 @@ if __name__ == "__main__":
         for metric, value in get_metrics(pred, gold).items():
             cum_metrics[metric].append(value)
         sent_cnt += 1
-        # break
 
-        # if sent_cnt > 10: 
+        # if sent_cnt > 2: 
         #     break
     
     print({metric: np.mean(data) for metric, data in cum_metrics.items()})

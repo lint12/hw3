@@ -15,6 +15,7 @@ Hints:
 from src.dependency_parse import DependencyParse
 from datasets import load_dataset
 import csv     
+import pickle5 as pickle
 
 def get_parses(split):
     datasets = load_dataset('universal_dependencies', 'en_gum')
@@ -94,11 +95,24 @@ if __name__ == "__main__":
     # print('rel_pos_set: ', rel_pos_set)
     # print('dep_label_set: ', dep_label_set)
 
+    vocab = {}
+    vocab['rel_pos_set'] = rel_pos_set
+    vocab['dep_label_set'] = dep_label_set
+
+    with open('vocab.pickle', 'wb') as handle:
+        pickle.dump(vocab, handle, protocol=pickle.HIGHEST_PROTOCOL)
+
     val_pp = get_parses('validation')
     test_pp = get_parses('test')
 
     val_pp = add_unk(val_pp, rel_pos_set, dep_label_set)
     test_pp = add_unk(test_pp, rel_pos_set, dep_label_set)   
+
+    with open('val_pp.pickle', 'wb') as handle:
+        pickle.dump(val_pp, handle, protocol=pickle.HIGHEST_PROTOCOL)
+
+    with open('test_pp.pickle', 'wb') as handle:
+        pickle.dump(test_pp, handle, protocol=pickle.HIGHEST_PROTOCOL)
  
     with open('en_gum_10.tsv', 'w', newline='') as f_output:
         tsv_output = csv.writer(f_output, delimiter='\t')
