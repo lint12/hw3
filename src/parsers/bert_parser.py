@@ -10,9 +10,6 @@ from transformers import DistilBertTokenizer, DistilBertModel
 import networkx as nx
 from networkx.algorithms.tree.branchings import maximum_spanning_arborescence
 
-from scipy.sparse import csr_matrix
-from scipy.sparse.csgraph import minimum_spanning_tree
-
 class distilBERT_FT(nn.Module):
 
     def __init__(self, pre_model, hidden_dim, n_rel_classes, n_dep_classes):
@@ -23,18 +20,11 @@ class distilBERT_FT(nn.Module):
 
     def forward(self, input):
       hidden_states = self.pre_model(**input).last_hidden_state
-      #print(f'hidden_states : {hidden_states.size()}')
 
       rel_out = self.rel_project(hidden_states)
-      #print(f'rel_out size: {rel_out.size()}')
-      #print(f'rel_out: {rel_out}')
-
       dep_out = self.dep_project(hidden_states)
-      #print(f'dep_out size: {dep_out.size()}')
-      #print(f'dep_out: {dep_out}')
 
       return rel_out, dep_out
-
 
 
 class BertParser(Parser):
@@ -54,17 +44,13 @@ class BertParser(Parser):
 
 
     def filter_scores_and_preds(self, output, ud_token_len, bert_tokens, n_classes, idx_mapping): 
-        # print('output: ', output)
-        # print('ud_token_len: ', ud_token_len)
-        # print('bert_tokens len: ', len(bert_tokens))
-        # print('bert_tokens: ', bert_tokens)
-
-        # tokens here are UD tokens
+        # create a tensor to hold the filtered token_scores
         filtered_scores = torch.zeros((1, ud_token_len, n_classes))
 
         hyphen_prev = False 
-        filtered_idx = []
+        filtered_idx = [] # stores all the token's idx that we want to keep from the bert tokens
 
+        # run a for loop through the bert tokens to get the indexes we want
         for t_idx, token in enumerate(bert_tokens):
             if t_idx == 0 or t_idx == len(bert_tokens) - 1: 
                 continue
@@ -79,20 +65,18 @@ class BertParser(Parser):
             else: 
                 filtered_idx.append(t_idx)
 
+        # if the number of tokens we want is greater than the number of UD tokens 
+        # then chop off any tokens that exceed that length
         if len(filtered_idx) > ud_token_len: 
             filtered_idx = filtered_idx[:ud_token_len]
 
-        #print('filtered_idx: ', filtered_idx)
-        #print('num of idx in filtered_idx: ', len(filtered_idx))
-
+        # fill in the filtered_scores tensor with the token_scores we want
         fs_idx = 0 
         for good_idx in filtered_idx:
             filtered_scores[0][fs_idx] = output[0][good_idx]
             fs_idx += 1
-        
-        #print('filtered_scores size: ', filtered_scores.size())
-        #print('filtered_scores: ', filtered_scores)
 
+        # flip the idx_mapping so that we can retrieve rel_pos from class idx
         class_to_label = dict((v,k) for k,v in idx_mapping.items())
 
         preds = []
@@ -100,7 +84,6 @@ class BertParser(Parser):
             pred = torch.argmax(token_scores).item() # class idx
             preds.append(class_to_label[pred]) # label
 
-        #print('preds: ', preds)
         return preds, filtered_scores
 
     def parse(self, sentence: str, tokens: list) -> DependencyParse:
@@ -125,42 +108,30 @@ class BertParser(Parser):
 
         classifier.load_state_dict(self.trained_model)
 
-        #print(classifier)
         encoded_input = tokenizer(sentence, return_tensors='pt', padding=True)
-        #print('encoded_input: ', encoded_input['input_ids'])
-        print('encoded_input size: ', encoded_input['input_ids'].size())
-        #print('UD Tokens: ', tokens)
-        print('len of UD tokens: ', len(tokens))
 
         rel_output, dep_output = classifier(encoded_input)
 
+        # add cls and sep to the bert_tokens so that when you loop through the outputs 
+        # from your model it matches the indices
         bert_tokens = ['cls'] + tokenizer.tokenize(sentence) + ['sep']
-        print('bert tokens length: ', len(bert_tokens))
-        #print('text of bert tokens: ', bert_tokens)
-
-        print('rel_output size: ', rel_output.size())
-        # print('n_rel_classes: ', n_rel_classes)
-        print('dep_output size: ', dep_output.size())
-        # print('n_dep_classes: ', n_dep_classes)
 
         pred_rels, filtered_rel_scores = self.filter_scores_and_preds(rel_output, len(tokens), bert_tokens, n_rel_classes, rel_pos_idxs)
         pred_deprel, filtered_dep_scores = self.filter_scores_and_preds(dep_output, len(tokens), bert_tokens, n_dep_classes, dep_label_idxs)
 
-
         if self.mst: 
             print('USING MST TO DECODE PREDICTIONS')
             G = nx.DiGraph()
-            #print('filtered_rel_scores', filtered_rel_scores)
 
             num_filtered_tokens = filtered_rel_scores.size()[1]
 
             for idx, token_scores in enumerate(filtered_rel_scores[0]): 
-                #print('token scores: ', token_scores)
+                # change token_scores to log probabilities
                 log_probs = F.log_softmax(token_scores)
-                #print('log_probs: ', log_probs)
 
                 G.add_node(idx)
 
+                # create outgoing edges and add weights 
                 for t_idx in range(num_filtered_tokens): 
                     if t_idx != idx: 
                         rel_pos = t_idx - idx
@@ -171,27 +142,26 @@ class BertParser(Parser):
                             rel_class = rel_pos_idxs['unk']
                             
                         w = log_probs[rel_class]
-                        #print('w: ', w.item())
-                        G.add_edge(t_idx, idx, weight = w.item())
 
-            print('G: ', G)
+                        G.add_edge(t_idx, idx, weight = w.item())
                 
+            # find maximum weight path
             MST = maximum_spanning_arborescence(G)
-            print('MST edges: ', MST.edges())
 
             pred_head = ['0'] * len(MST.nodes()) 
 
+            # find head value from rel_pos 
             for edge in MST.edges(): 
                 node = edge[1]
                 head = edge[0] + 1
                 pred_head[node] = str(head)
-            
-            print('pred_head: ', pred_head)
 
         else:
             print('USING ARGMAX TO DECODE PREDICTIONS')
 
             pred_head = []
+            
+            # find head value from rel_pos 
             for idx, pred in enumerate(pred_rels): 
                 if type(pred) != int: 
                     pred_head.append('-1')

@@ -47,8 +47,6 @@ def get_parses(split):
     return dependency_parse_list
 
 def add_unk(pp_dataset, rel_pos_set, dep_label_set): 
-    print('in unk')
-
     unk_dataset = []
 
     for sentence in pp_dataset: 
@@ -56,14 +54,12 @@ def add_unk(pp_dataset, rel_pos_set, dep_label_set):
         deprel_list = []
         for rel_pos in sentence['rel_pos']: 
             if rel_pos not in rel_pos_set: 
-                print('found unknown rel pos')
                 rel_list.append('unk')
             else:
                 rel_list.append(rel_pos)
 
         for deprel in sentence['dep_label']: 
             if deprel not in dep_label_set: 
-                print('found unknown deprel')
                 deprel_list.append('unk')
             else:
                 deprel_list.append(deprel)
@@ -91,9 +87,6 @@ if __name__ == "__main__":
 
         for deprel in sentence['dep_label']:
             dep_label_set.add(deprel)
-
-    # print('rel_pos_set: ', rel_pos_set)
-    # print('dep_label_set: ', dep_label_set)
 
     vocab = {}
     vocab['rel_pos_set'] = rel_pos_set

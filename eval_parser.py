@@ -68,13 +68,12 @@ if __name__ == "__main__":
     sent_cnt = 1
     for gold in get_parses(args.data_subset, test=args.test):
         print(f'====On sentence {sent_cnt}====')
+        
         pred = parser.parse(gold.text, gold.tokens)
         for metric, value in get_metrics(pred, gold).items():
             cum_metrics[metric].append(value)
-        sent_cnt += 1
 
-        # if sent_cnt > 2: 
-        #     break
+        sent_cnt += 1
     
     print({metric: np.mean(data) for metric, data in cum_metrics.items()})
 
